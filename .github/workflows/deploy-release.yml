@@ -4,7 +4,7 @@ on:
   release:
     types: [created]
 
-permissions:  # Новый раздел: даёт права на чтение/запись в репозиторий
+permissions:
   contents: write
 
 jobs:
@@ -29,10 +29,16 @@ jobs:
         run: |
           RELEASE_TAG=${{ github.event.release.tag_name }}
           mkdir -p gh-pages/$RELEASE_TAG
+          echo "Created directory: gh-pages/$RELEASE_TAG"  # Debug: Подтверждение создания директории
 
       - name: Copy files excluding gh-pages
         run: |
           rsync -av --exclude='gh-pages' ./* gh-pages/$RELEASE_TAG/
+          echo "Rsync completed to gh-pages/$RELEASE_TAG"  # Debug: Подтверждение rsync
+
+      - name: Debug directory structure  # Новый шаг: Показ структуры директорий
+        run: |
+          ls -R gh-pages  # Рекурсивный список всех файлов и папок в gh-pages
 
       - name: Commit and push to gh-pages if changes
         run: |
