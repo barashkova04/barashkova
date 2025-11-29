@@ -11,8 +11,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout main to source
         uses: actions/checkout@v4
+        with:
+          ref: main  # Явно указываем main (хотя по умолчанию это оно)
+          path: source  # Checkout в отдельную папку 'source'
 
       - name: Setup Git
         run: |
@@ -31,13 +34,13 @@ jobs:
           mkdir -p gh-pages/$RELEASE_TAG
           echo "Created directory: gh-pages/$RELEASE_TAG"
 
-      - name: Debug source directory  # Новый шаг: Проверка источника (main)
+      - name: Debug source directory
         run: |
-          ls -R .  # Рекурсивный список файлов в текущей директории (main)
+          ls -R source
 
-      - name: Copy files excluding gh-pages
+      - name: Copy files from source
         run: |
-          rsync -av --exclude='gh-pages' --exclude='.git' . gh-pages/$RELEASE_TAG/
+          rsync -av --exclude='.git' source/ gh-pages/$RELEASE_TAG/
           echo "Rsync completed to gh-pages/$RELEASE_TAG"
 
       - name: Debug directory structure
