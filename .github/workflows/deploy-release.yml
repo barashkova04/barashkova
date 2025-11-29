@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4  # Checkout main
 
       - name: Setup Git
         run: |
@@ -20,13 +20,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: gh-pages
-          path: gh-pages
+          path: gh-pages  # gh-pages в отдельной папке
 
       - name: Create release directory
         run: |
           RELEASE_TAG=${{ github.event.release.tag_name }}
           mkdir -p gh-pages/$RELEASE_TAG
-          cp -r * gh-pages/$RELEASE_TAG/  # Копируем все файлы из main в поддиректорию v{tag}
+
+      - name: Copy files excluding gh-pages  # используем rsync для исключения
+        run: |
+          rsync -av --exclude='gh-pages' ./* gh-pages/$RELEASE_TAG/
 
       - name: Commit and push to gh-pages
         run: |
