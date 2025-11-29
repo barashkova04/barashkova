@@ -1,0 +1,36 @@
+name: Deploy Release to GitHub Pages
+
+on:
+  release:
+    types: [created]  # Запускается при создании нового релиза
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Create release directory
+        run: |
+          RELEASE_TAG=${{ github.event.release.tag_name }}
+          mkdir -p gh-pages/$RELEASE_TAG
+          cp -r * gh-pages/$RELEASE_TAG/  # Копируем все файлы из main в поддиректорию v{tag}
+
+      - name: Commit and push to gh-pages
+        run: |
+          cd gh-pages
+          git add .
+          git commit -m "Deploy release ${{ github.event.release.tag_name }} to GitHub Pages"
+          git push origin gh-pages
