@@ -29,16 +29,20 @@ jobs:
         run: |
           RELEASE_TAG=${{ github.event.release.tag_name }}
           mkdir -p gh-pages/$RELEASE_TAG
-          echo "Created directory: gh-pages/$RELEASE_TAG"  # Debug: Подтверждение создания директории
+          echo "Created directory: gh-pages/$RELEASE_TAG"
+
+      - name: Debug source directory  # Новый шаг: Проверка источника (main)
+        run: |
+          ls -R .  # Рекурсивный список файлов в текущей директории (main)
 
       - name: Copy files excluding gh-pages
         run: |
-          rsync -av --exclude='gh-pages' ./* gh-pages/$RELEASE_TAG/
-          echo "Rsync completed to gh-pages/$RELEASE_TAG"  # Debug: Подтверждение rsync
+          rsync -av --exclude='gh-pages' --exclude='.git' . gh-pages/$RELEASE_TAG/
+          echo "Rsync completed to gh-pages/$RELEASE_TAG"
 
-      - name: Debug directory structure  # Новый шаг: Показ структуры директорий
+      - name: Debug directory structure
         run: |
-          ls -R gh-pages  # Рекурсивный список всех файлов и папок в gh-pages
+          ls -R gh-pages
 
       - name: Commit and push to gh-pages if changes
         run: |
