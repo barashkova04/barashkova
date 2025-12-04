@@ -1,59 +1,115 @@
-name: Deploy Release to GitHub Pages
+name: Publish Website on Release
 
 on:
   release:
-    types: [created]
+    types: [published]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout main to source
+      - name: Checkout repository with tags
         uses: actions/checkout@v4
         with:
-          ref: main  # Явно указываем main (хотя по умолчанию это оно)
-          path: source  # Checkout в отдельную папку 'source'
+          fetch-depth: 0
 
-      - name: Setup Git
+      - name: Prepare build workspace
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
+          set -euxo pipefail
+          rm -rf site
+          mkdir -p site
 
-      - name: Checkout gh-pages
-        uses: actions/checkout@v4
+      - name: Collect all release tags (v*)
+        id: tags
+        shell: bash
+        run: |
+          TAGS=$(git tag -l 'v*' --sort=-v:refname)
+          echo "tags<<EOF" >> $GITHUB_OUTPUT
+          echo "$TAGS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Build each version into /vX.Y.Z/
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_REF=$(git rev-parse --abbrev-ref HEAD || true)
+          if [ "$CURRENT_REF" = "HEAD" ]; then CURRENT_REF=$(git describe --always --tags); fi
+
+          TAGS="${{ steps.tags.outputs.tags }}"
+          # Идём по тегам построчно
+          while IFS= read -r t; do
+            [ -z "$t" ] && continue
+            echo ">>> Building version $t"
+            git checkout --quiet "$t"
+
+            ver="${t#v}"
+            out="site/v${ver}"
+            mkdir -p "$out"
+
+            echo "• Copying RU/EN from repo root…"
+            [ -d ru ] && cp -R ru "$out"/ || true
+            [ -d en ] && cp -R en "$out"/ || true
+
+            # индекс версии с выбором RU/EN
+            printf '%s\n' \
+              '<!doctype html>' \
+              '<html lang="ru"><meta charset="utf-8">' \
+              "<title>Версия v${ver}</title>" \
+              "<h1>Версия v${ver}</h1>" \
+              '<ul>' \
+              '  <li><a href="./ru/">Русская версия</a></li>' \
+              '  <li><a href="./en/">English version</a></li>' \
+              '</ul>' \
+              '<p><a href="../">← Ко всем версиям</a></p>' \
+              '</html>' \
+            > "$out/index.html"
+          done <<< "$TAGS"
+
+          git checkout --quiet "$CURRENT_REF"
+
+      - name: Generate root index with versions list
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAGS="${{ steps.tags.outputs.tags }}"
+          {
+            echo '<!doctype html>'
+            echo '<html lang="ru"><meta charset="utf-8">'
+            echo '<title>Сайт — версии</title>'
+            echo '<h1>Доступные версии</h1>'
+            echo '<p>Кликните по версии, затем выберите RU/EN.</p>'
+            echo '<ul>'
+            while IFS= read -r t; do
+              [ -z "$t" ] && continue
+              ver="${t#v}"
+              echo "  <li><a href=\"./v${ver}/\">v${ver}</a></li>"
+            done <<< "$TAGS"
+            echo '</ul>'
+            echo '</html>'
+          } > site/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          ref: gh-pages
-          path: gh-pages
+          path: site
 
-      - name: Create release directory
-        run: |
-          RELEASE_TAG=${{ github.event.release.tag_name }}
-          mkdir -p gh-pages/$RELEASE_TAG
-          echo "Created directory: gh-pages/$RELEASE_TAG"
-
-      - name: Debug source directory
-        run: |
-          ls -R source
-
-      - name: Copy files from source
-        run: |
-          rsync -av --exclude='.git' source/ gh-pages/$RELEASE_TAG/
-          echo "Rsync completed to gh-pages/$RELEASE_TAG"
-
-      - name: Debug directory structure
-        run: |
-          ls -R gh-pages
-
-      - name: Commit and push to gh-pages if changes
-        run: |
-          cd gh-pages
-          git add .
-          if git diff --cached --quiet; then
-            echo "No changes to commit. Skipping."
-          else
-            git commit -m "Deploy release ${{ github.event.release.tag_name }} to GitHub Pages"
-            git push origin gh-pages
-          fi
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
